@@ -20,6 +20,7 @@ public class MazeGenerator : MonoBehaviour
     {
         GenerateGrid();
         currentCell = grid[0, 0];
+        GenerateMaze();
     }
 
     void GenerateGrid()
@@ -58,7 +59,7 @@ public class MazeGenerator : MonoBehaviour
 
                 currentCell.isVisited = true;
             }
-            else if (stack.Count == 0)
+            else if (stack.Count > 0)
             {
                 currentCell = stack.Pop();
             }
@@ -126,18 +127,23 @@ public class MazeGenerator : MonoBehaviour
     private void OnDrawGizmos()
     {
         if (grid == null) return;
-
-        Gizmos.color = Color.lawnGreen;
-
+        
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
                 Cell cell = grid[x, y];
                 Vector3 pos = new Vector3(x * cellSize, y * cellSize, 0);
-
+                
+                Gizmos.color = Color.white;
                 if (cell.wallTop)
+                    Gizmos.DrawLine(pos + new Vector3(0, cellSize, 0), pos + new Vector3(cellSize, cellSize, 0));
+                if (cell.wallRight)
+                    Gizmos.DrawLine(pos + new Vector3(cellSize, 0, 0), pos + new Vector3(cellSize, cellSize, 0));
+                if (cell.wallBottom)
                     Gizmos.DrawLine(pos, pos + new Vector3(cellSize, 0, 0));
+                if (cell.wallLeft)
+                    Gizmos.DrawLine(pos, pos + new Vector3(0, cellSize, 0));
             }
         }
     }
