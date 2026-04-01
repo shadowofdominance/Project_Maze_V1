@@ -16,6 +16,10 @@ public class MazeGenerator : MonoBehaviour
 
     private Cell[,] grid;
 
+    [SerializeField] private GameObject horizontalWallPrefab;
+    [SerializeField] private GameObject verticalWallPrefab;
+
+
     private void Start()
     {
         GenerateGrid();
@@ -70,6 +74,8 @@ public class MazeGenerator : MonoBehaviour
 
             yield return new WaitForSeconds(0.02f);
         }
+
+        RenderMaze();
     }
 
     Cell GetUnvisitedNeighbour(Cell cell)
@@ -127,14 +133,14 @@ public class MazeGenerator : MonoBehaviour
     private void OnDrawGizmos()
     {
         if (grid == null) return;
-        
+
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
                 Cell cell = grid[x, y];
                 Vector3 pos = new Vector3(x * cellSize, y * cellSize, 0);
-                
+
                 Gizmos.color = Color.white;
                 if (cell.wallTop)
                     Gizmos.DrawLine(pos + new Vector3(0, cellSize, 0), pos + new Vector3(cellSize, cellSize, 0));
@@ -144,6 +150,39 @@ public class MazeGenerator : MonoBehaviour
                     Gizmos.DrawLine(pos, pos + new Vector3(cellSize, 0, 0));
                 if (cell.wallLeft)
                     Gizmos.DrawLine(pos, pos + new Vector3(0, cellSize, 0));
+            }
+        }
+    }
+
+    void RenderMaze()
+    {
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Cell cell = grid[x, y];
+                
+                Vector3 position = new Vector3(x * cellSize, y * cellSize, 0);
+
+                if (cell.wallTop)
+                {
+                    Instantiate(horizontalWallPrefab, position + new Vector3(cellSize / 2f, cellSize, 0), Quaternion.identity);
+                }
+
+                if (cell.wallRight)
+                {
+                    Instantiate(verticalWallPrefab, position + new Vector3(cellSize, cellSize / 2f, 0), Quaternion.identity);
+                }
+
+                if (cell.wallBottom)
+                {
+                    Instantiate(horizontalWallPrefab, position + new Vector3(cellSize / 2f, 0, 0), Quaternion.identity);
+                }
+
+                if (cell.wallLeft)
+                {
+                    Instantiate(verticalWallPrefab, position + new Vector3(0, cellSize / 2f, 0), Quaternion.identity);
+                }
             }
         }
     }
