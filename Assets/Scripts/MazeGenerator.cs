@@ -43,7 +43,7 @@ public class MazeGenerator : MonoBehaviour
     void GenerateMaze()
     {
         StartCoroutine(DFS());
-    }
+    } 
 
     IEnumerator DFS()
     {
@@ -75,7 +75,22 @@ public class MazeGenerator : MonoBehaviour
             yield return new WaitForSeconds(0.02f);
         }
 
+        CreateEntryAndExit();
         RenderMaze();
+    }
+
+    void CreateEntryAndExit()
+    {
+        if (grid == null || width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        Cell entryCell = grid[0, 0];
+        Cell exitCell = grid[width - 1, height - 1];
+
+        entryCell.wallLeft = false;
+        exitCell.wallRight = false;
     }
 
     Cell GetUnvisitedNeighbour(Cell cell)
