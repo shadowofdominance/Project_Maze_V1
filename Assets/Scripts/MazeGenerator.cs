@@ -1,77 +1,93 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Generates a maze with depth-first search and then renders the remaining walls.
+/// </summary>
 public class MazeGenerator : MonoBehaviour
 {
-    private Cell currentCell;
-    private Stack<Cell> stack = new Stack<Cell>();
+    private Cell _currentCell;
+    private readonly Stack<Cell> _backtrackStack = new Stack<Cell>();
+    private Cell[,] _grid;
 
-    public int width = 10;
-    public int height = 10;
-    public float cellSize = 1f;
-
-    private Cell[,] grid;
-
+    [SerializeField] private int width = 10;
+    [SerializeField] private int height = 10;
+    [SerializeField] private float cellSize = 1f;
     [SerializeField] private GameObject horizontalWallPrefab;
     [SerializeField] private GameObject verticalWallPrefab;
 
+    public int Width => width;
+    public int Height => height;
+    public float CellSize => cellSize;
 
+    /// <summary>
+    /// Builds the cell grid, selects the starting cell, and launches generation.
+    /// </summary>
     private void Start()
     {
         GenerateGrid();
-        currentCell = grid[0, 0];
+        _currentCell = _grid[0, 0];
         GenerateMaze();
     }
 
-    void GenerateGrid()
+    /// <summary>
+    /// Creates the 2D array of cells that defines the maze layout.
+    /// </summary>
+    private void GenerateGrid()
     {
-        grid = new Cell[width, height];
+        _grid = new Cell[width, height];
 
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                grid[x, y] = new Cell(x, y);
+                _grid[x, y] = new Cell(x, y);
             }
         }
     }
 
-    void GenerateMaze()
+    /// <summary>
+    /// Starts the coroutine that carves the maze paths.
+    /// </summary>
+    private void GenerateMaze()
     {
-        StartCoroutine(DFS());
-    } 
+        StartCoroutine(Dfs());
+    }
 
-    IEnumerator DFS()
+    /// <summary>
+    /// Carves the maze using depth-first search with stack-based backtracking.
+    /// </summary>
+    private IEnumerator Dfs()
     {
-        currentCell.isVisited = true;
+        _currentCell.MarkVisited();
 
         while (true)
         {
-            Cell next = GetUnvisitedNeighbour(currentCell);
+            Cell next = GetUnvisitedNeighbour(_currentCell);
 
             if (next != null)
             {
-                stack.Push(currentCell);
+                // Save the current path so the algorithm can step backward after a dead end.
+                _backtrackStack.Push(_currentCell);
 
-                RemoveWalls(currentCell, next);
+                RemoveWalls(_currentCell, next);
+                _currentCell = next;
 
-                currentCell = next;
-
-                currentCell.isVisited = true;
+                // Mark immediately so this cell cannot be selected again by another branch.
+                _currentCell.MarkVisited();
             }
-            else if (stack.Count > 0)
+            else if (_backtrackStack.Count > 0)
             {
-                currentCell = stack.Pop();
+                _currentCell = _backtrackStack.Pop();
             }
             else
             {
                 break;
             }
 
+            // The delay makes the generation sequence visible while the game is running.
             yield return new WaitForSeconds(0.02f);
         }
 
@@ -79,122 +95,136 @@ public class MazeGenerator : MonoBehaviour
         RenderMaze();
     }
 
-    void CreateEntryAndExit()
+    /// <summary>
+    /// Opens the maze at the first and last cells to create a start and finish.
+    /// </summary>
+    private void CreateEntryAndExit()
     {
-        if (grid == null || width <= 0 || height <= 0)
+        if (_grid == null || width <= 0 || height <= 0)
         {
             return;
         }
 
-        Cell entryCell = grid[0, 0];
-        Cell exitCell = grid[width - 1, height - 1];
+        Cell entryCell = _grid[0, 0];
+        Cell exitCell = _grid[width - 1, height - 1];
 
-        entryCell.wallLeft = false;
-        exitCell.wallRight = false;
+        // These two openings define the playable entrance and exit.
+        entryCell.RemoveLeftWall();
+        exitCell.RemoveRightWall();
     }
 
-    Cell GetUnvisitedNeighbour(Cell cell)
+    /// <summary>
+    /// Returns a random unvisited neighbour of the supplied cell, if one exists.
+    /// </summary>
+    private Cell GetUnvisitedNeighbour(Cell cell)
     {
         List<Cell> neighbours = new List<Cell>();
 
-        int x = cell.x;
-        int y = cell.y;
+        int x = cell.X;
+        int y = cell.Y;
 
-        if (x > 0 && !grid[x - 1, y].isVisited)
-            neighbours.Add(grid[x - 1, y]);
-        if (x < width - 1 && !grid[x + 1, y].isVisited)
-            neighbours.Add(grid[x + 1, y]);
-        if (y > 0 && !grid[x, y - 1].isVisited)
-            neighbours.Add(grid[x, y - 1]);
-        if (y < height - 1 && !grid[x, y + 1].isVisited)
-            neighbours.Add(grid[x, y + 1]);
+        if (x > 0 && !_grid[x - 1, y].IsVisited)
+            neighbours.Add(_grid[x - 1, y]);
+        if (x < width - 1 && !_grid[x + 1, y].IsVisited)
+            neighbours.Add(_grid[x + 1, y]);
+        if (y > 0 && !_grid[x, y - 1].IsVisited)
+            neighbours.Add(_grid[x, y - 1]);
+        if (y < height - 1 && !_grid[x, y + 1].IsVisited)
+            neighbours.Add(_grid[x, y + 1]);
 
         if (neighbours.Count > 0)
         {
+            // Random choice is what keeps the maze different on each generation.
             return neighbours[Random.Range(0, neighbours.Count)];
         }
 
         return null;
     }
 
-    void RemoveWalls(Cell a, Cell b)
+    /// <summary>
+    /// Removes the shared wall between two adjacent cells.
+    /// </summary>
+    private void RemoveWalls(Cell a, Cell b)
     {
-        int dx = a.x - b.x;
-        int dy = a.y - b.y;
+        int dx = a.X - b.X;
+        int dy = a.Y - b.Y;
 
         if (dx == 1)
         {
-            a.wallLeft = false;
-            b.wallRight = false;
+            a.RemoveLeftWall();
+            b.RemoveRightWall();
         }
         else if (dx == -1)
         {
-            a.wallRight = false;
-            b.wallLeft = false;
+            a.RemoveRightWall();
+            b.RemoveLeftWall();
         }
 
         if (dy == 1)
         {
-            a.wallBottom = false;
-            b.wallTop = false;
+            a.RemoveBottomWall();
+            b.RemoveTopWall();
         }
         else if (dy == -1)
         {
-            a.wallTop = false;
-            b.wallBottom = false;
+            a.RemoveTopWall();
+            b.RemoveBottomWall();
         }
     }
 
-    private void OnDrawGizmos()
+    // Useful for debugging the generated layout without instantiating prefabs.
+    /*private void OnDrawGizmos()
     {
-        if (grid == null) return;
+        if (_grid == null) return;
 
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                Cell cell = grid[x, y];
+                Cell cell = _grid[x, y];
                 Vector3 pos = new Vector3(x * cellSize, y * cellSize, 0);
 
                 Gizmos.color = Color.white;
-                if (cell.wallTop)
+                if (cell.WallTop)
                     Gizmos.DrawLine(pos + new Vector3(0, cellSize, 0), pos + new Vector3(cellSize, cellSize, 0));
-                if (cell.wallRight)
+                if (cell.WallRight)
                     Gizmos.DrawLine(pos + new Vector3(cellSize, 0, 0), pos + new Vector3(cellSize, cellSize, 0));
-                if (cell.wallBottom)
+                if (cell.WallBottom)
                     Gizmos.DrawLine(pos, pos + new Vector3(cellSize, 0, 0));
-                if (cell.wallLeft)
+                if (cell.WallLeft)
                     Gizmos.DrawLine(pos, pos + new Vector3(0, cellSize, 0));
             }
         }
-    }
+    }*/
 
-    void RenderMaze()
+    /// <summary>
+    /// Spawns wall prefabs for every wall that remains after generation.
+    /// </summary>
+    private void RenderMaze()
     {
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                Cell cell = grid[x, y];
-                
+                Cell cell = _grid[x, y];
                 Vector3 position = new Vector3(x * cellSize, y * cellSize, 0);
 
-                if (cell.wallTop)
+                if (cell.WallTop)
                 {
                     Instantiate(horizontalWallPrefab, position + new Vector3(cellSize / 2f, cellSize, 0), Quaternion.identity);
                 }
 
-                if (cell.wallRight)
+                if (cell.WallRight)
                 {
                     Instantiate(verticalWallPrefab, position + new Vector3(cellSize, cellSize / 2f, 0), Quaternion.identity);
                 }
 
-                if (cell.wallBottom)
+                if (cell.WallBottom)
                 {
                     Instantiate(horizontalWallPrefab, position + new Vector3(cellSize / 2f, 0, 0), Quaternion.identity);
                 }
 
-                if (cell.wallLeft)
+                if (cell.WallLeft)
                 {
                     Instantiate(verticalWallPrefab, position + new Vector3(0, cellSize / 2f, 0), Quaternion.identity);
                 }
