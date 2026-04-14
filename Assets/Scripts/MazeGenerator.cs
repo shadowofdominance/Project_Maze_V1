@@ -2,19 +2,28 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// Generates a maze with depth-first search and then renders the remaining walls.
 /// </summary>
 public class MazeGenerator : MonoBehaviour
 {
+    private const string WallContainerName = "MazeWalls";
+
     private Cell _currentCell;
     private readonly Stack<Cell> _backtrackStack = new Stack<Cell>();
     private Cell[,] _grid;
+    private readonly List<GameObject> _spawnedWalls = new List<GameObject>();
+    private Coroutine _generationRoutine;
+    private Transform _wallContainer;
 
     [SerializeField] private int width = 10;
     [SerializeField] private int height = 10;
     [SerializeField] private float cellSize = 1f;
+    [SerializeField] private float generationDelay = 0.02f;
     [SerializeField] private GameObject horizontalWallPrefab;
     [SerializeField] private GameObject verticalWallPrefab;
 
@@ -27,9 +36,7 @@ public class MazeGenerator : MonoBehaviour
     /// </summary>
     private void Start()
     {
-        GenerateGrid();
-        _currentCell = _grid[0, 0];
-        GenerateMaze();
+        GenerateNewMaze();
     }
 
     /// <summary>
@@ -53,7 +60,71 @@ public class MazeGenerator : MonoBehaviour
     /// </summary>
     private void GenerateMaze()
     {
-        StartCoroutine(Dfs());
+        if (Application.isPlaying)
+        {
+            _generationRoutine = StartCoroutine(Dfs());
+            return;
+        }
+
+        GenerateMazeImmediate();
+    }
+
+    /// <summary>
+    /// Rebuilds the maze using the current generator settings.
+    /// </summary>
+    public void GenerateNewMaze()
+    {
+        if (!HasValidSetup())
+        {
+            return;
+        }
+
+        if (_generationRoutine != null)
+        {
+            StopCoroutine(_generationRoutine);
+            _generationRoutine = null;
+        }
+
+        _backtrackStack.Clear();
+        ClearRenderedMaze();
+        GenerateGrid();
+        _currentCell = _grid[0, 0];
+        GenerateMaze();
+    }
+
+    /// <summary>
+    /// Sets the maze dimensions and rebuilds it.
+    /// </summary>
+    public void SetMazeSize(int newWidth, int newHeight)
+    {
+        width = Mathf.Max(1, newWidth);
+        height = Mathf.Max(1, newHeight);
+        GenerateNewMaze();
+    }
+
+    /// <summary>
+    /// Adds the same amount to both width and height, then rebuilds the maze.
+    /// </summary>
+    public void IncreaseMazeSize(int amount)
+    {
+        int delta = Mathf.Max(1, amount);
+        SetMazeSize(width + delta, height + delta);
+    }
+
+    /// <summary>
+    /// Restores the maze to the provided default size and rebuilds it.
+    /// </summary>
+    public void ResetMaze(int defaultWidth, int defaultHeight)
+    {
+        SetMazeSize(defaultWidth, defaultHeight);
+    }
+
+    /// <summary>
+    /// Updates the delay used during play mode generation.
+    /// </summary>
+    public void SetGenerationDelay(float newDelay)
+    {
+        generationDelay = Mathf.Max(0f, newDelay);
     }
 
     /// <summary>
@@ -88,7 +159,47 @@ public class MazeGenerator : MonoBehaviour
             }
 
             // The delay makes the generation sequence visible while the game is running.
-            yield return new WaitForSeconds(0.02f);
+            if (generationDelay > 0f)
+            {
+                yield return new WaitForSeconds(generationDelay);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+
+        CreateEntryAndExit();
+        RenderMaze();
+        _generationRoutine = null;
+    }
+
+    /// <summary>
+    /// Generates the maze instantly so it can be used in editor tools.
+    /// </summary>
+    private void GenerateMazeImmediate()
+    {
+        _currentCell.MarkVisited();
+
+        while (true)
+        {
+            Cell next = GetUnvisitedNeighbour(_currentCell);
+
+            if (next != null)
+            {
+                _backtrackStack.Push(_currentCell);
+                RemoveWalls(_currentCell, next);
+                _currentCell = next;
+                _currentCell.MarkVisited();
+            }
+            else if (_backtrackStack.Count > 0)
+            {
+                _currentCell = _backtrackStack.Pop();
+            }
+            else
+            {
+                break;
+            }
         }
 
         CreateEntryAndExit();
@@ -211,24 +322,101 @@ public class MazeGenerator : MonoBehaviour
 
                 if (cell.WallTop)
                 {
-                    Instantiate(horizontalWallPrefab, position + new Vector3(cellSize / 2f, cellSize, 0), Quaternion.identity);
+                    SpawnWall(horizontalWallPrefab, position + new Vector3(cellSize / 2f, cellSize, 0));
                 }
 
                 if (cell.WallRight)
                 {
-                    Instantiate(verticalWallPrefab, position + new Vector3(cellSize, cellSize / 2f, 0), Quaternion.identity);
+                    SpawnWall(verticalWallPrefab, position + new Vector3(cellSize, cellSize / 2f, 0));
                 }
 
                 if (cell.WallBottom)
                 {
-                    Instantiate(horizontalWallPrefab, position + new Vector3(cellSize / 2f, 0, 0), Quaternion.identity);
+                    SpawnWall(horizontalWallPrefab, position + new Vector3(cellSize / 2f, 0, 0));
                 }
 
                 if (cell.WallLeft)
                 {
-                    Instantiate(verticalWallPrefab, position + new Vector3(0, cellSize / 2f, 0), Quaternion.identity);
+                    SpawnWall(verticalWallPrefab, position + new Vector3(0, cellSize / 2f, 0));
                 }
             }
         }
+    }
+
+    private bool HasValidSetup()
+    {
+        return horizontalWallPrefab != null && verticalWallPrefab != null;
+    }
+
+    private void SpawnWall(GameObject wallPrefab, Vector3 position)
+    {
+        GameObject wall = Instantiate(wallPrefab, position, Quaternion.identity, GetOrCreateWallContainer());
+        _spawnedWalls.Add(wall);
+    }
+
+    private void ClearRenderedMaze()
+    {
+        for (int i = 0; i < _spawnedWalls.Count; i++)
+        {
+            GameObject wall = _spawnedWalls[i];
+            if (wall == null)
+            {
+                continue;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(wall);
+            }
+            else
+            {
+#if UNITY_EDITOR
+                DestroyImmediate(wall);
+#endif
+            }
+        }
+
+        _spawnedWalls.Clear();
+
+        Transform wallContainer = GetOrCreateWallContainer();
+        for (int i = wallContainer.childCount - 1; i >= 0; i--)
+        {
+            GameObject child = wallContainer.GetChild(i).gameObject;
+
+            if (Application.isPlaying)
+            {
+                Destroy(child);
+            }
+            else
+            {
+#if UNITY_EDITOR
+                DestroyImmediate(child);
+#endif
+            }
+        }
+
+#if UNITY_EDITOR
+        EditorUtility.SetDirty(this);
+#endif
+    }
+
+    private Transform GetOrCreateWallContainer()
+    {
+        if (_wallContainer != null)
+        {
+            return _wallContainer;
+        }
+
+        Transform existingContainer = transform.Find(WallContainerName);
+        if (existingContainer != null)
+        {
+            _wallContainer = existingContainer;
+            return _wallContainer;
+        }
+
+        GameObject container = new GameObject(WallContainerName);
+        container.transform.SetParent(transform, false);
+        _wallContainer = container.transform;
+        return _wallContainer;
     }
 }
