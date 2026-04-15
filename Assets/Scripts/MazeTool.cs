@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
+// Keeps this tool out of player builds and exposes maze controls directly in the Unity Editor.
 public class MazeTool : EditorWindow
 {
     private enum MazeDifficulty
@@ -24,6 +25,7 @@ public class MazeTool : EditorWindow
     [MenuItem("Window/Maze/Maze Tool")]
     public static void ShowWindow()
     {
+        // Reuses the same editor window instance and gives it a readable title in the Window menu.
         GetWindow<MazeTool>("Maze Tool");
     }
 
@@ -34,6 +36,7 @@ public class MazeTool : EditorWindow
 
         if (_mazeGenerator == null)
         {
+            // The rest of the tool depends on a scene instance to mutate, so stop here until one is assigned.
             EditorGUILayout.HelpBox("Assign a MazeGenerator from the scene to control the maze.", MessageType.Info);
             return;
         }
@@ -59,6 +62,7 @@ public class MazeTool : EditorWindow
 
         if (GUILayout.Button("Apply Difficulty"))
         {
+            // Applies the currently selected preset by converting it into a square maze size.
             ApplyDifficulty(_difficulty);
         }
     }
@@ -76,6 +80,7 @@ public class MazeTool : EditorWindow
 
         if (GUILayout.Button("Increase Maze Size"))
         {
+            // Register the state before mutating so the editor undo stack can restore the previous maze settings.
             Undo.RecordObject(_mazeGenerator, "Increase Maze Size");
             _mazeGenerator.IncreaseMazeSize(_sizeIncreaseStep);
             MarkGeneratorDirty();
@@ -91,6 +96,7 @@ public class MazeTool : EditorWindow
 
         if (GUILayout.Button("Reset Maze"))
         {
+            // Records the change so resetting dimensions can also be undone from the editor.
             Undo.RecordObject(_mazeGenerator, "Reset Maze");
             _mazeGenerator.ResetMaze(_resetWidth, _resetHeight);
             MarkGeneratorDirty();
@@ -101,6 +107,7 @@ public class MazeTool : EditorWindow
     {
         Undo.RecordObject(_mazeGenerator, "Set Maze Difficulty");
         int size = GetMazeSize(difficulty);
+        // Difficulty presets map to a single size and are applied as a square maze.
         _mazeGenerator.SetMazeSize(size, size);
         MarkGeneratorDirty();
     }
@@ -129,10 +136,12 @@ public class MazeTool : EditorWindow
 
     private void MarkGeneratorDirty()
     {
+        // Marks the component as modified so Unity saves the serialized changes made by this editor tool.
         EditorUtility.SetDirty(_mazeGenerator);
 
         if (!Application.isPlaying)
         {
+            // In edit mode, also flag the scene itself so the user is prompted to save the maze changes.
             EditorSceneManager.MarkSceneDirty(_mazeGenerator.gameObject.scene);
         }
     }
