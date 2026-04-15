@@ -22,6 +22,7 @@ public class MazeTool : EditorWindow
     private int _resetWidth = 10;
     private int _resetHeight = 10;
 
+    // Opens the custom Maze Tool window from the Unity Editor menu.
     [MenuItem("Window/Maze/Maze Tool")]
     public static void ShowWindow()
     {
@@ -29,6 +30,7 @@ public class MazeTool : EditorWindow
         GetWindow<MazeTool>("Maze Tool");
     }
 
+    // Draws the editor window UI and stops early until a target MazeGenerator is assigned.
     private void OnGUI()
     {
         EditorGUILayout.LabelField("Maze Generator", EditorStyles.boldLabel);
@@ -51,6 +53,7 @@ public class MazeTool : EditorWindow
         DrawResetControls();
     }
 
+    // Renders the preset difficulty controls and applies the selected preset when requested.
     private void DrawDifficultyControls()
     {
         EditorGUILayout.LabelField("Difficulty", EditorStyles.boldLabel);
@@ -67,6 +70,7 @@ public class MazeTool : EditorWindow
         }
     }
 
+    // Renders actions for regenerating the maze or increasing its size incrementally.
     private void DrawSizeControls()
     {
         EditorGUILayout.LabelField("Maze Actions", EditorStyles.boldLabel);
@@ -87,6 +91,7 @@ public class MazeTool : EditorWindow
         }
     }
 
+    // Renders controls for resetting the maze to a specific width and height.
     private void DrawResetControls()
     {
         EditorGUILayout.LabelField("Reset", EditorStyles.boldLabel);
@@ -103,6 +108,7 @@ public class MazeTool : EditorWindow
         }
     }
 
+    // Applies the selected difficulty by resolving its preset size and updating the maze dimensions.
     private void ApplyDifficulty(MazeDifficulty difficulty)
     {
         Undo.RecordObject(_mazeGenerator, "Set Maze Difficulty");
@@ -112,6 +118,7 @@ public class MazeTool : EditorWindow
         MarkGeneratorDirty();
     }
 
+    // Regenerates the current maze layout without changing the configured dimensions.
     private void RegenerateMaze()
     {
         Undo.RecordObject(_mazeGenerator, "Reload Maze");
@@ -119,6 +126,7 @@ public class MazeTool : EditorWindow
         MarkGeneratorDirty();
     }
 
+    // Returns the configured maze size that matches the requested difficulty preset.
     private int GetMazeSize(MazeDifficulty difficulty)
     {
         switch (difficulty)
@@ -134,6 +142,7 @@ public class MazeTool : EditorWindow
         }
     }
 
+    // Marks the maze generator and scene as modified so Unity persists editor-time changes.
     private void MarkGeneratorDirty()
     {
         // Marks the component as modified so Unity saves the serialized changes made by this editor tool.
